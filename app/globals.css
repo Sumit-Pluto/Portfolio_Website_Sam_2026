@@ -1,0 +1,76 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* --font-display / --font-body are injected by next/font in app/layout.jsx */
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: #0a0a0b;
+  color: #f5f5f7;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow-x: hidden;
+}
+
+/* thin custom scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+}
+::-webkit-scrollbar-track {
+  background: #0a0a0b;
+}
+::-webkit-scrollbar-thumb {
+  background: #26262c;
+  border-radius: 6px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #35353d;
+}
+
+/* selection */
+::selection {
+  background: #ffe500;
+  color: #0a0a0b;
+}
+
+/* utility: gradient shimmer text */
+.text-shimmer {
+  background: linear-gradient(90deg, #f5f5f7 0%, #C9A24B 25%, #FFE500 50%, #C9A24B 75%, #f5f5f7 100%);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: shimmer 6s linear infinite;
+}
+
+/* utility: subtle grid background */
+.bg-grid {
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+  background-size: 44px 44px;
+}
+
+/* glow ring for circles */
+.circle-glow {
+  box-shadow: 0 0 0 6px rgba(255, 45, 45, 0.9), 0 0 40px rgba(255, 229, 0, 0.35);
+}
+
+.glass {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(10px);
+}
+
+/* hide focus outline only for mouse users, keep for keyboard */
+:focus:not(:focus-visible) {
+  outline: none;
+}

@@ -1,0 +1,81 @@
+# Sumit Dhankhar — Portfolio
+
+A dark, animated portfolio built with **Next.js 14 (App Router) + Tailwind CSS + Framer Motion + Recharts**.
+
+Features:
+- **Hero** with your photo, three signature yellow/red circles showing **live** LeetCode / Codeforces / CodeChef stats, an animated shimmer name, rotating roles, and an interactive **Pac-Man** game (autonomous demo → click to play; your photo, the circles and the name act as walls; a ghost catching you restarts the round).
+- **Academics** — semester selector, GPA-trend line chart, grade-distribution donut (recomputes per semester), and a per-semester subject table.
+- **Skills** — grouped icon grid. **Projects** — connected to your GitHub (live stars/links) with curated featured cards.
+- **Journey** — an animated, scroll-filled timeline.
+- **Contact** — email + socials.
+
+---
+
+## 1. Run it locally
+
+```bash
+npm install
+npm run dev        # http://localhost:3000
+```
+
+Build for production:
+
+```bash
+npm run build && npm start
+```
+
+Requires Node 18.18+ (Node 24 is fine).
+
+## 2. Add your photo  ← do this first
+
+Drop a **square** image at:
+
+```
+public/profile.jpg
+```
+
+Until then the hero shows an "SD" monogram automatically. (PNG? name it `profile.jpg` or edit the `src` in `components/Hero.jsx`.)
+
+## 3. Edit your content (all in `/data`)
+
+| File | What's inside |
+|---|---|
+| `data/profile.js` | Name, about text, roles, email/phone/location, social handles, nav labels, and **fallback stat numbers** used when a live API is down. |
+| `data/academics.js` | SGPA per semester, CGPA, grade-distribution totals, and per-semester **subjects** (placeholders — replace with your real subjects/credits/grades). |
+| `data/skills.js` | Skill groups (icon names from `react-icons`) and **featured projects**. |
+| `data/journey.js` | Experience timeline + highlight badges. |
+
+## 4. Live stats — how they work
+
+Server-side routes (`app/api/*`) + `lib/stats.js` fetch your stats and **cache for 1 hour**. Each one falls back to the numbers in `data/profile.js` if the source is unreachable, so the site never shows a blank circle.
+
+- **Codeforces** — official API. Live. ✅
+- **LeetCode** — official GraphQL. Live. ✅
+- **CodeChef** — no official API; uses a community endpoint that is sometimes down → then it uses your fallback (`1587 / 2★`). Keep that fallback current in `data/profile.js`.
+- **GitHub** — public REST API (rate-limited to 60 req/hr unauthenticated). For headroom, set an env var `GITHUB_TOKEN` (a classic read-only PAT) in `.env.local` and on Vercel.
+
+### Featured projects ↔ GitHub
+In `data/skills.js`, set each featured project's `repo` to the **exact** GitHub repo name to auto-attach its live stars and code link. Your public repos currently include e.g. `Kokoro_TTS_colab`, `LangGraph_Agent`, `Chat-with-your-document` — if `OptionSmith` / `agentic-trading` / `HireIQ-Web` are private or named differently, either make them public, rename the `repo` field, or leave `repo: ""` (the card still shows with its blurb).
+
+## 5. Pac-Man
+Runs only on large screens with a mouse (skipped on touch/mobile). Click **▶ Click to play Pac-Man** in the hero, drive with **Arrow keys / WASD**, **Esc** to return to the demo.
+
+## 6. Deploy to Vercel
+
+1. Push this folder to a new GitHub repo.
+2. On [vercel.com](https://vercel.com) → **New Project** → import the repo. Framework auto-detects as **Next.js**. No config needed.
+3. (Optional) Project → Settings → **Environment Variables** → add `GITHUB_TOKEN`.
+4. Deploy. Stats refresh hourly (ISR).
+
+## 7. Theming
+Brand colors live in `tailwind.config.js` (`pop` = the yellow, `popline` = red ring, `gold` = accent, `ink*` = backgrounds). Fonts are wired in `app/layout.jsx` (Sora + Inter via `next/font`).
+
+## Project structure
+```
+app/            layout, page (server-renders stats), globals.css, api/ routes
+components/     Nav, Hero, PacmanGame, StatCircle, Academics, Skills,
+                Projects, Journey, About, Contact, Reveal
+data/           profile · academics · skills · journey   ← edit these
+lib/            stats.js (fetch + fallback), icons.js (icon map)
+public/         profile.jpg (add yours)
+```
