@@ -1,6 +1,7 @@
 import "./globals.css";
 import { Sora, Inter } from "next/font/google";
 import { profile } from "@/data/profile";
+import { Analytics } from "@vercel/analytics/next";
 
 const sora = Sora({
   subsets: ["latin"],
@@ -32,7 +33,10 @@ export const viewport = {
 export default function RootLayout({ children }) {
   return (
     <html lang="en" className={`${sora.variable} ${inter.variable}`}>
-      <body className="font-body bg-ink text-white antialiased">{children}</body>
+      <body className="font-body bg-ink text-white antialiased">
+        {children}
+        <Analytics />
+      </body>
     </html>
   );
 }
