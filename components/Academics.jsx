@@ -207,37 +207,24 @@ export default function Academics() {
                 <h3 className="font-display text-lg font-bold text-white">Semester {selectedSem.id} · Subjects</h3>
                 <span className="font-display text-sm text-gold">SGPA {selectedSem.sgpa.toFixed(2)}</span>
               </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-left text-mute border-b border-white/8">
-                      <th className="py-2 pr-4 font-medium">Code</th>
-                      <th className="py-2 pr-4 font-medium">Subject</th>
-                      <th className="py-2 pr-4 font-medium text-center">Credits</th>
-                      <th className="py-2 font-medium text-center">Grade</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {selectedSem.subjects.map((s) => (
-                      <tr key={s.code} className="border-b border-white/5 last:border-0">
-                        <td className="py-2.5 pr-4 text-mute tabular-nums">{s.code}</td>
-                        <td className="py-2.5 pr-4 text-white/90">{s.name}</td>
-                        <td className="py-2.5 pr-4 text-center text-mute tabular-nums">{s.credits}</td>
-                        <td className="py-2.5 text-center">
-                          <span
-                            className="inline-block rounded-md px-2 py-0.5 text-xs font-bold text-white"
-                            style={{ background: gradeColors[s.grade] || "#8b8b93" }}
-                          >
-                            {s.grade}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-1">
+                {selectedSem.subjects.map((s) => (
+                  <div key={s.code} className="flex items-center gap-3 border-b border-white/5 py-2">
+                    <span
+                      className="shrink-0 grid place-items-center h-6 min-w-[2.1rem] px-1 rounded-md text-xs font-bold text-white"
+                      style={{ background: gradeColors[s.grade] || "#8b8b93" }}
+                    >
+                      {s.grade}
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block text-sm text-white/90 leading-tight">{s.name}</span>
+                      <span className="block text-[11px] text-mute tabular-nums">{s.code}</span>
+                    </span>
+                  </div>
+                ))}
               </div>
               <p className="mt-3 text-xs text-mute">
-                Tip: edit <code className="text-white/70">data/academics.js</code> to set your exact subjects, credits and grades.
+                {selectedSem.subjects.length} subjects · SGPA {selectedSem.sgpa.toFixed(2)}
               </p>
             </motion.div>
           )}

@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { profile } from "@/data/profile";
 import StatCircle, { StatChip } from "@/components/StatCircle";
 import PacmanGame from "@/components/PacmanGame";
+import { FiDownload } from "react-icons/fi";
 
 function RotatingRole() {
   const [i, setI] = useState(0);
@@ -127,6 +128,19 @@ export default function Hero({ stats }) {
         <StatCircle stat={s.codeforces} floatDelay={1.2} className="bottom-[9%] left-[6%] h-40 w-40" />
         <StatCircle stat={s.codechef} floatDelay={2.1} className="bottom-[11%] right-[8%] h-40 w-40" />
 
+        {/* resume bubble — right-center between LeetCode and CodeChef */}
+        <a
+          href={profile.resumeUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          data-wall="rect"
+          title="View / download my résumé"
+          style={{ animationDelay: "1.6s" }}
+          className="absolute z-20 top-[44%] right-[3%] -translate-y-1/2 flex items-center gap-2 rounded-full bg-pop text-ink circle-glow px-4 py-2.5 font-display font-extrabold text-sm animate-floaty hover:scale-105 transition-transform"
+        >
+          <FiDownload className="text-base" /> RESUME
+        </a>
+
         <div className="absolute left-1/2 top-[56%] -translate-x-1/2 w-[38rem] max-w-[90vw] flex flex-col items-center">
           {canPlay && (
             <div className="mb-5">
@@ -162,6 +176,14 @@ export default function Hero({ stats }) {
           <StatChip stat={s.codechef} />
           {s.github && <StatChip stat={s.github} />}
         </div>
+        <a
+          href={profile.resumeUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-2 rounded-full bg-pop text-ink px-6 py-3 font-display font-extrabold text-sm shadow-lg shadow-black/30"
+        >
+          <FiDownload className="text-base" /> RESUME
+        </a>
       </div>
 
       {/* scroll cue */}

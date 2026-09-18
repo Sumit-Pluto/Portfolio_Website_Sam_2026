@@ -10,6 +10,7 @@ export const profile = {
   email: "sumitx368@gmail.com",
   phone: "+91-7703937033",
   location: "New Delhi, India",
+  resumeUrl: "https://drive.google.com/drive/folders/1Hp7iG9TpebDSffXb6pJWrSU04KbC9SM-?usp=sharing",
 
   // your public handles
   handles: {

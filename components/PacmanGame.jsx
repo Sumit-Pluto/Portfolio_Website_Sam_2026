@@ -4,23 +4,21 @@ import { useEffect, useRef, useState } from "react";
 
 /**
  * Pac-Man overlay for the hero.
- * - The hero's profile photo, stat circles and name block (elements tagged
- *   [data-wall]) are read every frame as obstacles, so Pac-Man and the ghosts
- *   physically avoid them.
- * - Default: autonomous "flee" demo. Click ▶ Play to drive with Arrow/WASD.
- *   A ghost catching you restarts the round. Esc returns to the demo.
- * - Only runs on large screens with a fine pointer (skipped on touch/mobile).
+ * - Hero elements tagged [data-wall] are read as obstacles so Pac-Man / ghosts avoid them.
+ * - Staggered entrance: Pac-Man pops in first, then the ghosts one-by-one; they only
+ *   start chasing once fully popped in (gives the page a moment to settle → no first-load lag).
+ * - Perf: obstacle reads are throttled, and the whole loop pauses when the hero is off-screen.
+ * - Default: autonomous "flee" demo. Play mode = Arrow/WASD; a ghost catch = Game Over.
+ * - Only runs on large screens with a fine pointer.
  */
 export default function PacmanGame({ containerRef, apiRef, onMode }) {
   const canvasRef = useRef(null);
   const rafRef = useRef(0);
-  const gs = useRef(null); // mutable game state (avoids re-renders)
-  const spawnRef = useRef(null); // lets the buttons reset the round
+  const gs = useRef(null);
   const ctrl = useRef({ start: () => {}, stop: () => {} });
   const [enabled, setEnabled] = useState(false);
   const [ui, setUi] = useState({ mode: "auto", score: 0, best: 0 });
 
-  // decide after mount to avoid hydration mismatch
   useEffect(() => {
     const mq = window.matchMedia("(min-width: 1024px) and (pointer: fine)");
     const apply = () => setEnabled(mq.matches);
@@ -37,14 +35,15 @@ export default function PacmanGame({ containerRef, apiRef, onMode }) {
     const ctx = canvas.getContext("2d");
 
     const COLORS = ["#ff4d4d", "#4dd2ff", "#ff9ce0", "#ffb85c"];
+    const POP_MS = 340; // pop-in animation duration
     const state = {
       w: 0,
       h: 0,
       dpr: Math.min(window.devicePixelRatio || 1, 2),
-      pac: { x: 0, y: 0, r: 18, dir: 0, speed: 2.6 },
+      pac: { x: 0, y: 0, r: 0, r0: 18, dir: 0, speed: 2.6, bornAt: 0 },
       ghosts: [],
       keys: {},
-      mode: "auto", // 'auto' | 'play' | 'over'
+      mode: "auto",
       t: 0,
       startT: 0,
       score: 0,
@@ -65,10 +64,26 @@ export default function PacmanGame({ containerRef, apiRef, onMode }) {
     };
     resize();
 
+    // easeOutBack → a springy "pop"
+    const easeOutBack = (t) => {
+      const c1 = 1.70158;
+      const c3 = c1 + 1;
+      return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
+    };
+    const popScale = (bornAt, now) => {
+      const t = (now - bornAt) / POP_MS;
+      if (t <= 0) return 0;
+      if (t >= 1) return 1;
+      return Math.max(0, easeOutBack(t));
+    };
+
     const spawn = () => {
+      const t0 = performance.now();
       state.pac.x = state.w * 0.5;
       state.pac.y = state.h * 0.24;
       state.pac.dir = Math.PI / 2;
+      state.pac.r = 0;
+      state.pac.bornAt = t0 + 150; // Pac-Man pops in first
       const spots = [
         [state.w * 0.3, state.h * 0.34],
         [state.w * 0.7, state.h * 0.34],
@@ -77,22 +92,23 @@ export default function PacmanGame({ containerRef, apiRef, onMode }) {
       state.ghosts = spots.map((c, i) => ({
         x: c[0],
         y: c[1],
-        r: 15,
+        r: 0,
+        r0: 15,
         dir: Math.random() * Math.PI * 2,
         color: COLORS[i % COLORS.length],
         speed: 1.7,
+        bornAt: t0 + 750 + i * 520, // ghosts pop in one-by-one
+        born: false,
+        active: false,
       }));
-      state.startT = performance.now();
+      state.startT = t0;
       state.score = 0;
     };
     spawn();
-    spawnRef.current = spawn;
 
     function startGame() {
       spawn();
       state.mode = "play";
-      state.startT = performance.now();
-      state.score = 0;
       setUi((u) => ({ ...u, mode: "play", score: 0 }));
       if (onMode) onMode("play");
     }
@@ -105,7 +121,6 @@ export default function PacmanGame({ containerRef, apiRef, onMode }) {
     if (apiRef) apiRef.current = ctrl.current;
     if (onMode) onMode("auto");
 
-    // read the DOM walls as obstacles, relative to the host
     const readObstacles = () => {
       const hostRect = host.getBoundingClientRect();
       const els = host.querySelectorAll("[data-wall]");
@@ -142,7 +157,6 @@ export default function PacmanGame({ containerRef, apiRef, onMode }) {
       }
       return null;
     };
-
     const openDir = (px, py, pr, obs, away) => {
       let best = Math.random() * Math.PI * 2;
       let bestScore = -Infinity;
@@ -152,7 +166,7 @@ export default function PacmanGame({ containerRef, apiRef, onMode }) {
         const ty = py + Math.sin(a) * pr * 3.5;
         if (blocked(tx, ty, pr, obs)) continue;
         let score = Math.random() * 0.6;
-        if (away) score += Math.cos(a - Math.atan2(py - away.y, px - away.x)) * 1.4; // flee
+        if (away) score += Math.cos(a - Math.atan2(py - away.y, px - away.x)) * 1.4;
         if (score > bestScore) {
           bestScore = score;
           best = a;
@@ -160,9 +174,7 @@ export default function PacmanGame({ containerRef, apiRef, onMode }) {
       }
       return best;
     };
-
     const stepBody = (b, dx, dy, obs) => {
-      // axis-separated movement so bodies slide along walls
       let moved = false;
       const nx = b.x + dx * b.speed;
       const ny = b.y + dy * b.speed;
@@ -176,11 +188,11 @@ export default function PacmanGame({ containerRef, apiRef, onMode }) {
       }
       return moved;
     };
-
     const nearestGhost = () => {
       let g = null;
       let d = Infinity;
       for (const gh of state.ghosts) {
+        if (!gh.active) continue;
         const dd = Math.hypot(gh.x - state.pac.x, gh.y - state.pac.y);
         if (dd < d) {
           d = dd;
@@ -190,22 +202,15 @@ export default function PacmanGame({ containerRef, apiRef, onMode }) {
       return g;
     };
 
-    // ── input ──────────────────────────────────────────────────────────────
+    // ── input ──
     const onKey = (e, down) => {
       const k = e.key.toLowerCase();
-      const map = {
-        arrowup: "up", w: "up",
-        arrowdown: "down", s: "down",
-        arrowleft: "left", a: "left",
-        arrowright: "right", d: "right",
-      };
+      const map = { arrowup: "up", w: "up", arrowdown: "down", s: "down", arrowleft: "left", a: "left", arrowright: "right", d: "right" };
       if (map[k]) {
         state.keys[map[k]] = down;
         if (state.mode === "play") e.preventDefault();
       }
-      if (down && k === "escape" && state.mode !== "auto") {
-        stopGame();
-      }
+      if (down && k === "escape" && state.mode !== "auto") stopGame();
     };
     const kd = (e) => onKey(e, true);
     const ku = (e) => onKey(e, false);
@@ -214,14 +219,43 @@ export default function PacmanGame({ containerRef, apiRef, onMode }) {
     const ro = new ResizeObserver(resize);
     ro.observe(host);
 
-    // ── main loop ────────────────────────────────────────────────────────────
-    const loop = (now) => {
+    // ── perf: throttle obstacle reads + pause when off-screen ──
+    let obsCache = readObstacles();
+    let frame = 0;
+    let visible = true;
+    const io = new IntersectionObserver(
+      ([e]) => {
+        visible = e.isIntersecting;
+        if (visible && rafRef.current === 0) rafRef.current = requestAnimationFrame(loop);
+      },
+      { threshold: 0 }
+    );
+    io.observe(host);
+
+    // ── main loop ──
+    function loop(now) {
+      if (!visible) {
+        rafRef.current = 0; // pause; the IntersectionObserver will resume it
+        return;
+      }
       state.t = now;
-      const obs = readObstacles();
+      if (frame % 6 === 0) obsCache = readObstacles(); // throttle layout reads
+      frame++;
+      const obs = obsCache;
       const pac = state.pac;
 
-      // never let a body sit trapped inside a wall (a floating bubble may drift over it)
-      [pac, ...state.ghosts].forEach((b) => {
+      // entrance state
+      const pacBorn = now >= pac.bornAt;
+      pac.r = pacBorn ? pac.r0 * popScale(pac.bornAt, now) : 0;
+      for (const g of state.ghosts) {
+        g.born = now >= g.bornAt;
+        g.active = now >= g.bornAt + POP_MS; // chases only once fully popped in
+        g.r = g.born ? g.r0 * popScale(g.bornAt, now) : 0;
+      }
+
+      // keep born bodies out of walls
+      const born = [pacBorn ? pac : null, ...state.ghosts.filter((g) => g.born)].filter(Boolean);
+      born.forEach((b) => {
         if (insideObs(b.x, b.y, b.r, obs)) {
           const o = findOpen(b.r, obs);
           if (o) {
@@ -231,61 +265,63 @@ export default function PacmanGame({ containerRef, apiRef, onMode }) {
         }
       });
 
-      // Pac-Man movement
-      let dx = 0;
-      let dy = 0;
-      if (state.mode === "play") {
-        pac.speed = 2.6;
-        if (state.keys.left) dx -= 1;
-        if (state.keys.right) dx += 1;
-        if (state.keys.up) dy -= 1;
-        if (state.keys.down) dy += 1;
-        if (dx || dy) {
-          const m = Math.hypot(dx, dy);
-          dx /= m;
-          dy /= m;
-          pac.dir = Math.atan2(dy, dx);
-          stepBody(pac, dx, dy, obs);
+      // Pac-Man movement (once born)
+      if (pacBorn) {
+        let dx = 0;
+        let dy = 0;
+        if (state.mode === "play") {
+          pac.speed = 2.6;
+          if (state.keys.left) dx -= 1;
+          if (state.keys.right) dx += 1;
+          if (state.keys.up) dy -= 1;
+          if (state.keys.down) dy += 1;
+          if (dx || dy) {
+            const m = Math.hypot(dx, dy);
+            dx /= m;
+            dy /= m;
+            pac.dir = Math.atan2(dy, dx);
+            stepBody(pac, dx, dy, obs);
+          }
+          state.score = (now - state.startT) / 1000;
+        } else if (state.mode === "auto") {
+          const ng = nearestGhost();
+          const gd = ng ? Math.hypot(ng.x - pac.x, ng.y - pac.y) : Infinity;
+          const scared = gd < 175;
+          pac.speed = scared ? 3.4 : 2.3;
+          if (scared || Math.random() < 0.02) pac.dir = openDir(pac.x, pac.y, pac.r, obs, ng);
+          dx = Math.cos(pac.dir);
+          dy = Math.sin(pac.dir);
+          const moved = stepBody(pac, dx, dy, obs);
+          if (!moved) pac.dir = openDir(pac.x, pac.y, pac.r, obs, ng);
         }
-        state.score = (performance.now() - state.startT) / 1000;
-      } else if (state.mode === "auto") {
-        // cat & mouse: Pac-Man flees and outruns the ghosts, so it is never caught
-        const ng = nearestGhost();
-        const gd = ng ? Math.hypot(ng.x - pac.x, ng.y - pac.y) : Infinity;
-        const scared = gd < 175;
-        pac.speed = scared ? 3.4 : 2.3;
-        if (scared || Math.random() < 0.02) pac.dir = openDir(pac.x, pac.y, pac.r, obs, ng);
-        dx = Math.cos(pac.dir);
-        dy = Math.sin(pac.dir);
-        const moved = stepBody(pac, dx, dy, obs);
-        if (!moved) pac.dir = openDir(pac.x, pac.y, pac.r, obs, ng);
       }
 
-      // Ghosts chase
+      // Ghosts chase (once active)
       for (const g of state.ghosts) {
+        if (!g.active) continue;
         let a = Math.atan2(pac.y - g.y, pac.x - g.x);
-        if (Math.random() < 0.05) a += (Math.random() - 0.5) * 1.2; // wobble
+        if (Math.random() < 0.05) a += (Math.random() - 0.5) * 1.2;
         const moved = stepBody(g, Math.cos(a), Math.sin(a), obs);
         if (!moved) {
           const na = openDir(g.x, g.y, g.r, obs, null);
           stepBody(g, Math.cos(na), Math.sin(na), obs);
         }
-        // capture only ends the game while the user is actually playing
-        if (state.mode === "play" && Math.hypot(g.x - pac.x, g.y - pac.y) < g.r + pac.r - 4) {
+        if (state.mode === "play" && pacBorn && Math.hypot(g.x - pac.x, g.y - pac.y) < g.r + pac.r - 4) {
           state.best = Math.max(state.best, state.score);
           state.mode = "over";
-          state.overT = performance.now();
+          state.overT = now;
           setUi((u) => ({ ...u, mode: "over", score: state.score, best: state.best }));
           if (onMode) onMode("over");
         }
       }
 
-      draw(obs);
+      draw(obs, pacBorn);
       rafRef.current = requestAnimationFrame(loop);
-    };
+    }
 
-    // ── rendering ────────────────────────────────────────────────────────────
+    // ── rendering ──
     const drawGhost = (g) => {
+      if (g.r < 1) return;
       const r = g.r;
       ctx.save();
       ctx.shadowColor = state.mode === "over" ? "#3b5bdb" : g.color;
@@ -303,9 +339,9 @@ export default function PacmanGame({ containerRef, apiRef, onMode }) {
       }
       ctx.closePath();
       ctx.fill();
-      // eyes
-      const ex = Math.cos(Math.atan2(state.pac.y - g.y, state.pac.x - g.x)) * 2.2;
-      const ey = Math.sin(Math.atan2(state.pac.y - g.y, state.pac.x - g.x)) * 2.2;
+      const ang = Math.atan2(state.pac.y - g.y, state.pac.x - g.x);
+      const ex = Math.cos(ang) * 2.2;
+      const ey = Math.sin(ang) * 2.2;
       for (const s of [-1, 1]) {
         ctx.fillStyle = "#fff";
         ctx.beginPath();
@@ -319,35 +355,35 @@ export default function PacmanGame({ containerRef, apiRef, onMode }) {
       ctx.restore();
     };
 
-    const draw = (obs) => {
+    const draw = (obs, pacBorn) => {
       ctx.clearRect(0, 0, state.w, state.h);
       const pac = state.pac;
-
-      // faint trail dots along the path (decorative pellets)
-      // Pac-Man
-      const ma = 0.28 * (0.5 + 0.5 * Math.abs(Math.sin(state.t / 90)));
-      ctx.save();
-      ctx.shadowColor = "rgba(255,229,0,0.55)";
-      ctx.shadowBlur = 18;
-      ctx.fillStyle = "#FFE500";
-      ctx.beginPath();
-      ctx.moveTo(pac.x, pac.y);
-      ctx.arc(pac.x, pac.y, pac.r, pac.dir + ma, pac.dir + Math.PI * 2 - ma);
-      ctx.closePath();
-      ctx.fill();
-      ctx.restore();
-
+      if (pacBorn && pac.r > 1) {
+        const ma = 0.28 * (0.5 + 0.5 * Math.abs(Math.sin(state.t / 90)));
+        ctx.save();
+        ctx.shadowColor = "rgba(255,229,0,0.55)";
+        ctx.shadowBlur = 18;
+        ctx.fillStyle = "#FFE500";
+        ctx.beginPath();
+        ctx.moveTo(pac.x, pac.y);
+        ctx.arc(pac.x, pac.y, pac.r, pac.dir + ma, pac.dir + Math.PI * 2 - ma);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      }
       for (const g of state.ghosts) drawGhost(g);
     };
 
     rafRef.current = requestAnimationFrame(loop);
     return () => {
       cancelAnimationFrame(rafRef.current);
+      rafRef.current = 0;
       window.removeEventListener("keydown", kd);
       window.removeEventListener("keyup", ku);
       ro.disconnect();
+      io.disconnect();
     };
-  }, [enabled, containerRef]);
+  }, [enabled, containerRef, apiRef, onMode]);
 
   if (!enabled) return null;
 
